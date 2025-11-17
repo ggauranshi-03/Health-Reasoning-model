@@ -1,5 +1,5 @@
 # ==============================================================
-#  Tabular → CoT Reasoning Dataset (FIXED: Batch Length + Relaxed Validation)
+#  Tabular → CoT Reasoning Dataset
 # ==============================================================
 
 import json
@@ -30,9 +30,9 @@ print(f"Loaded {len(df)} rows")
 data = Dataset.from_pandas(df[["tabular_row"]])
 
 # --------------------------------------------------------------
-# 2. Model: Phi-3-mini-4k-instruct (or swap to Mistral if downloaded)
+# 2. Model: Phi-3-mini-4k-instruct
 # --------------------------------------------------------------
-model_name = "microsoft/Phi-3-mini-4k-instruct"  # Keep Phi-3 (fast); or "mistralai/Mistral-7B-Instruct-v0.3"
+model_name = "microsoft/Phi-3-mini-4k-instruct"  
 
 bnb_cfg = BitsAndBytesConfig(
     load_in_4bit=True,
@@ -82,7 +82,7 @@ Final Answer: <advice + Hindi><|end|>
 
 
 # --------------------------------------------------------------
-# 4. Manual Generation + Parse (FIXES Batch Length + KeyError)
+# 4. Manual Generation + Parse
 # --------------------------------------------------------------
 def extract(txt, pat):
     m = re.search(pat, txt, re.DOTALL | re.IGNORECASE)
@@ -91,10 +91,9 @@ def extract(txt, pat):
 
 def make_cot(batch):
     batch_size = len(batch["tabular_row"])
-    outs = [None] * batch_size  # Pre-allocate full length to avoid Arrow error
+    outs = [None] * batch_size
     skip_count = 0
     for i, row in enumerate(batch["tabular_row"]):
-        # ESCAPE BRACES: Fix KeyError by doubling { } in row string
         row_escaped = row.replace("{", "{{").replace("}", "}}")
         prompt = PROMPT.format(row=row_escaped)
         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
@@ -102,7 +101,7 @@ def make_cot(batch):
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=300,  # Increased for completeness
+                max_new_tokens=300,  
                 temperature=0.3,  # Lower for consistency
                 do_sample=True,
                 pad_token_id=tokenizer.eos_token_id,
@@ -122,7 +121,7 @@ def make_cot(batch):
         )
         instruction = q if q != "N/A" else "Patient liver assessment query."
 
-        # Relaxes validation: Skip only if <150 chars or no "Step" (remove Hindi check for now)
+        # Skip only if <150 chars or no "Step"
         if len(full_out) < 150 or "Step" not in full_out:
             print(f"Skipping bad output for row {i}: {row[:50]}...")  # Log
             skip_count += 1
